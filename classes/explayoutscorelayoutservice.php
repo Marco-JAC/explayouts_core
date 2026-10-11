@@ -278,19 +278,17 @@ class expLayoutsCoreLayoutService
         foreach ( $params as $param )
             $param->remove();
 
-        $collection = expLayoutsCollection::fetchByBlock( $blockId );
-        if ( $collection )
-        {
-            $query = expLayoutsCollectionQuery::fetchByCollection( (int)$collection->attribute( 'id' ) );
-            if ( $query )
-                $query->remove();
+        $this->blockService()->deleteCollections( (int)$blockId );
+    }
 
-            $items = expLayoutsCollectionItem::fetchByCollection( (int)$collection->attribute( 'id' ) );
-            foreach ( $items as $item )
-                $item->remove();
-
-            $collection->remove();
-        }
+    /**
+     * The one place blocks are copied: the editor's "Duplicate block" and
+     * the layout copies below (draft, publish, layout copy) all go through
+     * expLayoutsCoreBlockService::copyTree().
+     */
+    protected function blockService()
+    {
+        return new expLayoutsCoreBlockService();
     }
 
     protected function copyLayoutContent( $source, $target )
@@ -316,96 +314,31 @@ class expLayoutsCoreLayoutService
             $newZone->store();
 
             $blocks = expLayoutsBlock::fetchByZone( (int)$zone->attribute( 'id' ), $sourceStatus );
-            $blockIdMap = array();
             foreach ( $blocks as $block )
             {
                 if ( (int)$block->attribute( 'parent_id' ) > 0 )
                     continue;
 
-                $this->copyBlockTree( $block, $newZone, $targetStatus, $blockIdMap );
+                $this->copyBlockTree( $block, $newZone, $targetStatus );
             }
         }
     }
 
-    protected function copyBlockTree( $sourceBlock, $targetZone, $targetStatus, &$blockIdMap )
+    protected function copyBlockTree( $sourceBlock, $targetZone, $targetStatus )
     {
-        $newBlock = $this->createBlockCopy( $sourceBlock, $targetZone, $targetStatus, $blockIdMap );
-
-        $children = expLayoutsBlock::fetchChildren( (int)$sourceBlock->attribute( 'id' ), (int)$sourceBlock->attribute( 'status' ) );
-        foreach ( $children as $child )
-        {
-            $this->copyBlockTree( $child, $targetZone, $targetStatus, $blockIdMap );
-        }
-
-        return $newBlock;
-    }
-
-    protected function createBlockCopy( $sourceBlock, $targetZone, $targetStatus, &$blockIdMap )
-    {
-        $sourceBlockId = (int)$sourceBlock->attribute( 'id' );
-        $newParentId = 0;
-
-        $sourceParentId = (int)$sourceBlock->attribute( 'parent_id' );
-        if ( $sourceParentId > 0 && isset( $blockIdMap[$sourceParentId] ) )
-            $newParentId = $blockIdMap[$sourceParentId];
-
-        $newBlock = expLayoutsBlock::create(
+        return $this->blockService()->copyTree(
+            $sourceBlock,
             (int)$targetZone->attribute( 'id' ),
             (int)$targetZone->attribute( 'layout_id' ),
-            (string)$sourceBlock->attribute( 'definition_identifier' ),
-            (string)$sourceBlock->attribute( 'name' )
+            (int)$targetStatus,
+            0,
+            '',
+            (int)$sourceBlock->attribute( 'position' )
         );
-        $newBlock->setAttribute( 'view_type', (string)$sourceBlock->attribute( 'view_type' ) );
-        $newBlock->setAttribute( 'item_view_type', (string)$sourceBlock->attribute( 'item_view_type' ) );
-        $newBlock->setAttribute( 'position', (int)$sourceBlock->attribute( 'position' ) );
-        $newBlock->setAttribute( 'parent_id', $newParentId );
-        $newBlock->setAttribute( 'placeholder', (string)$sourceBlock->attribute( 'placeholder' ) );
-        $newBlock->setAttribute( 'status', $targetStatus );
-        $newBlock->store();
-
-        $newBlockId = (int)$newBlock->attribute( 'id' );
-        $blockIdMap[$sourceBlockId] = $newBlockId;
-
-        $this->copyBlockData( $sourceBlock, $newBlock );
-
-        return $newBlock;
     }
 
     protected function copyBlockData( $sourceBlock, $targetBlock )
     {
-        $params = expLayoutsBlockParameter::fetchByBlock( (int)$sourceBlock->attribute( 'id' ) );
-        foreach ( $params as $param )
-        {
-            expLayoutsBlockParameter::set( (int)$targetBlock->attribute( 'id' ), (string)$param->attribute( 'name' ), (string)$param->attribute( 'value' ) );
-        }
-
-        $collection = expLayoutsCollection::fetchByBlock( (int)$sourceBlock->attribute( 'id' ) );
-        if ( $collection )
-        {
-            $newCollection = expLayoutsCollection::create( (int)$targetBlock->attribute( 'id' ), (string)$collection->attribute( 'collection_type' ) );
-            $newCollection->setAttribute( 'offset_value', (int)$collection->attribute( 'offset_value' ) );
-            $newCollection->setAttribute( 'limit_value', (int)$collection->attribute( 'limit_value' ) );
-            $newCollection->setAttribute( 'status', (int)$targetBlock->attribute( 'status' ) );
-            $newCollection->store();
-
-            $query = expLayoutsCollectionQuery::fetchByCollection( (int)$collection->attribute( 'id' ) );
-            if ( $query )
-            {
-                expLayoutsCollectionQuery::set( (int)$newCollection->attribute( 'id' ), (string)$query->attribute( 'query_type' ), (string)$query->attribute( 'parameters' ) );
-            }
-
-            $items = expLayoutsCollectionItem::fetchByCollection( (int)$collection->attribute( 'id' ) );
-            foreach ( $items as $item )
-            {
-                $newItem = expLayoutsCollectionItem::create(
-                    (int)$newCollection->attribute( 'id' ),
-                    (int)$item->attribute( 'value_id' ),
-                    (string)$item->attribute( 'value_type' ),
-                    (string)$item->attribute( 'item_type' )
-                );
-                $newItem->setAttribute( 'position', (int)$item->attribute( 'position' ) );
-                $newItem->store();
-            }
-        }
+        $this->blockService()->copyData( $sourceBlock, $targetBlock );
     }
 }
