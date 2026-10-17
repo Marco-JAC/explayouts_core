@@ -62,6 +62,16 @@ class expLayoutsCoreLayoutService
 
     public function create( $identifier, $name = '', $layoutType = '', $shared = false )
     {
+        $layout = $this->createLayoutRow( $identifier, $name, $layoutType, $shared );
+        $this->addMissingTypeZones( $layout );
+        return $layout;
+    }
+
+    /**
+     * The layout row of a new draft, with a unique identifier and no zones.
+     */
+    protected function createLayoutRow( $identifier, $name = '', $layoutType = '', $shared = false )
+    {
         $identifier = trim( $identifier );
         $baseIdentifier = $identifier !== '' ? $identifier : 'layout';
         $uniqueIdentifier = $baseIdentifier;
@@ -79,16 +89,36 @@ class expLayoutsCoreLayoutService
         $layout->setAttribute( 'modified', time() );
         $layout->store();
 
-        $zones = expLayoutsLayoutType::getZones( trim( $layoutType ) );
+        return $layout;
+    }
+
+    /**
+     * Adds each zone the layout's type defines and the layout does not have
+     * yet, once. A new layout gets them at positions 0, 1, 2 ...; zones added
+     * to a layout that already has some go after the last one.
+     */
+    protected function addMissingTypeZones( $layout )
+    {
+        $layoutId = (int)$layout->attribute( 'id' );
+        $status = (int)$layout->attribute( 'status' );
+
+        $existing = array();
         $position = 0;
-        foreach ( $zones as $zoneIdentifier )
+        foreach ( expLayoutsZone::fetchByLayout( $layoutId, $status ) as $zone )
         {
-            $zone = expLayoutsZone::create( (int)$layout->attribute( 'id' ), $zoneIdentifier, (int)$layout->attribute( 'status' ) );
-            $zone->setAttribute( 'position', $position++ );
-            $zone->store();
+            $existing[(string)$zone->attribute( 'identifier' )] = true;
+            $position = max( $position, (int)$zone->attribute( 'position' ) + 1 );
         }
 
-        return $layout;
+        foreach ( expLayoutsLayoutType::getZones( trim( (string)$layout->attribute( 'layout_type' ) ) ) as $zoneIdentifier )
+        {
+            if ( isset( $existing[$zoneIdentifier] ) )
+                continue;
+            $zone = expLayoutsZone::create( $layoutId, $zoneIdentifier, $status );
+            $zone->setAttribute( 'position', $position++ );
+            $zone->store();
+            $existing[$zoneIdentifier] = true;
+        }
     }
 
     public function update( $id, $attributes )
@@ -199,14 +229,20 @@ class expLayoutsCoreLayoutService
             return false;
 
         $newIdentifier = trim( $source->attribute( 'identifier' ) ) . '_' . time();
-        $copy = $this->create(
+
+        // The copy's zones are the source's, each made once with its link and
+        // its blocks. Making the type's zones first as well (as create() does
+        // for a new layout) gave every zone two rows: the editor added blocks
+        // to one and drew the other, so a block added to the copy vanished.
+        $copy = $this->createLayoutRow(
             $newIdentifier,
             (string)$source->attribute( 'name' ) . ' (copy)',
             (string)$source->attribute( 'layout_type' ),
             (int)$source->attribute( 'shared' ) === 1
         );
 
-        $this->copyLayoutContent( $source, $copy );
+        $this->copyLayoutContent( $source, $copy, true );
+        $this->addMissingTypeZones( $copy );
 
         return $copy;
     }
@@ -291,37 +327,84 @@ class expLayoutsCoreLayoutService
         return new expLayoutsCoreBlockService();
     }
 
-    protected function copyLayoutContent( $source, $target )
+    /**
+     * Copies the zones of $source, with their links and their blocks, into
+     * $target, which has no zones of its own yet.
+     *
+     * Draft and publish copy row for row ($mergeDuplicates false), so they
+     * never change what a layout holds. A layout copy ($mergeDuplicates true)
+     * makes one zone per identifier even when the source has several rows for
+     * one (the damage an earlier copy() left): the target zone takes the link
+     * and position of the row that has a link, else of the row with the most
+     * blocks, else of the first, and the blocks of every row of that
+     * identifier, so nothing in the source is left out.
+     */
+    protected function copyLayoutContent( $source, $target, $mergeDuplicates = false )
     {
         $sourceId = (int)$source->attribute( 'id' );
         $sourceStatus = (int)$source->attribute( 'status' );
         $targetId = (int)$target->attribute( 'id' );
         $targetStatus = (int)$target->attribute( 'status' );
 
-        $zones = expLayoutsZone::fetchByLayout( $sourceId, $sourceStatus );
-        foreach ( $zones as $zone )
+        $groups = array();
+        foreach ( expLayoutsZone::fetchByLayout( $sourceId, $sourceStatus ) as $zone )
         {
+            $key = $mergeDuplicates ? (string)$zone->attribute( 'identifier' ) : 'zone:' . (int)$zone->attribute( 'id' );
+            $groups[$key][] = $zone;
+        }
+
+        foreach ( $groups as $zones )
+        {
+            $blocksByZone = array();
+            foreach ( $zones as $index => $zone )
+            {
+                $blocksByZone[$index] = array();
+                foreach ( expLayoutsBlock::fetchByZone( (int)$zone->attribute( 'id' ), $sourceStatus ) as $block )
+                {
+                    if ( (int)$block->attribute( 'parent_id' ) <= 0 )
+                        $blocksByZone[$index][] = $block;
+                }
+            }
+
+            $primary = self::primaryZoneIndex( $zones, $blocksByZone );
+            $zone = $zones[$primary];
+
             $newZone = expLayoutsZone::create( $targetId, (string)$zone->attribute( 'identifier' ), $targetStatus );
             $newZone->setAttribute( 'position', (int)$zone->attribute( 'position' ) );
-
-            $linkedLayoutId = $zone->attribute( 'linked_layout_id' );
-            if ( $linkedLayoutId !== null && $linkedLayoutId !== false && (int)$linkedLayoutId > 0 )
+            if ( $zone->isLinked() )
             {
-                $newZone->setAttribute( 'linked_layout_id', (int)$linkedLayoutId );
-                $newZone->setAttribute( 'linked_zone_identifier', $zone->attribute( 'linked_zone_identifier' ) );
+                $newZone->setAttribute( 'linked_layout_id', (int)$zone->attribute( 'linked_layout_id' ) );
+                $newZone->setAttribute( 'linked_zone_identifier', (string)$zone->attribute( 'linked_zone_identifier' ) );
             }
-
             $newZone->store();
 
-            $blocks = expLayoutsBlock::fetchByZone( (int)$zone->attribute( 'id' ), $sourceStatus );
-            foreach ( $blocks as $block )
+            // The primary row's blocks first, then the others' in row order.
+            $order = array_merge( array( $primary ), array_diff( array_keys( $zones ), array( $primary ) ) );
+            foreach ( $order as $index )
             {
-                if ( (int)$block->attribute( 'parent_id' ) > 0 )
-                    continue;
-
-                $this->copyBlockTree( $block, $newZone, $targetStatus );
+                foreach ( $blocksByZone[$index] as $block )
+                    $this->copyBlockTree( $block, $newZone, $targetStatus );
             }
         }
+    }
+
+    /**
+     * Of several rows for one zone: the one with a link, else the one with
+     * the most top-level blocks, else the first.
+     */
+    protected static function primaryZoneIndex( $zones, $blocksByZone )
+    {
+        $best = 0;
+        foreach ( $zones as $index => $zone )
+        {
+            $linked = $zone->isLinked();
+            $bestLinked = $zones[$best]->isLinked();
+            if ( $linked && !$bestLinked )
+                $best = $index;
+            elseif ( $linked === $bestLinked && count( $blocksByZone[$index] ) > count( $blocksByZone[$best] ) )
+                $best = $index;
+        }
+        return $best;
     }
 
     protected function copyBlockTree( $sourceBlock, $targetZone, $targetStatus )

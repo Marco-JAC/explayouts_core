@@ -27,6 +27,21 @@ $copy = $layoutService->copy( $layoutId );
 $layoutService->delete( $layoutId );
 ```
 
+`copy()` makes a new draft with the source's zones, each exactly once, with
+the zone's link to a shared layout (when it has one), its position and its
+blocks, collections and parameters; a zone the layout type defines and the
+source lacks is added once. Since 1.0.8: earlier versions made every zone of
+the copy twice, and a block added to the copy could land in the row the
+editor does not show. A source damaged that way is merged into one zone per
+identifier in the copy. Draft and publish copy a layout row for row and do
+not change it.
+
+Test (an in-memory SQLite database, the site database is not touched):
+
+```bash
+php bin/php/ezexec.php extension/explayouts_core/tests/explayoutscorelayoutcopytest.php
+```
+
 ## Zones
 
 ```php
