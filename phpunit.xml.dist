@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The tests of explayouts_core that need no database: the layouts transfer format, its validator, the diff and the
+  mapping of node and object ids. Run from the Exponential root: php vendor/bin/phpunit -c extension/explayouts_core/phpunit.xml.dist
+  The round trip through two SQLite databases needs the kernel: php bin/php/ezexec.php extension/explayouts_core/tests/explayoutscoretransferroundtriptest.php
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         bootstrap="tests/bootstrap.php"
+         colors="false"
+         cacheDirectory="var/phpunit"
+         failOnWarning="true"
+         failOnRisky="true"
+         beStrictAboutOutputDuringTests="true">
+    <testsuites>
+        <testsuite name="explayouts_core">
+            <directory suffix="Test.php">tests</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>

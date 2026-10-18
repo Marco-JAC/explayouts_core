@@ -15,6 +15,7 @@ This extension provides the following capabilities:
 - Block services - Create, load, update, move and delete blocks, set their parameters and attach collections.
 - Collection services - Manage block collections and their items: add, load, update, remove and replace items in one call.
 - Rule services - Manage layout mapping rules: create, list, copy, enable/disable, delete and replace their targets and conditions.
+- Layouts transfer - Export layouts, shared layouts and rules into a versioned ZIP file and import it with a dry-run diff, per-item strategies, remote id mapping and one transaction (`expLayoutsCoreTransferService`, format in [doc/TRANSFER.md](doc/TRANSFER.md)).
 - Stable programmatic API - One intended public API surface for every consumer (admin modules, JSON API, CLI scripts, your own integrations) instead of raw persistence calls.
 
 Features
@@ -27,7 +28,7 @@ The following features are provided by the Exponential Layouts Core extension:
 - Zone linking - `expLayoutsCoreZoneService::setLinkedLayout()` links a zone to a shared layout, the mechanism behind reusable shared zones.
 - Whole-list item replacement - `expLayoutsCoreCollectionService::setItems()` replaces a collection's items in one call (item values are node ids), the operation the SPA editor uses when saving manual collections.
 - Target/condition replacement - `expLayoutsCoreRuleService::setTargets()` and `setConditions()` accept arrays of `type`/`value` hashes and replace the existing sets atomically.
-- No configuration of its own - The extension ships no INI files, modules or templates; it contains only the five service classes plus an `autoloads/explayouts_core_autoload.php` class map. All domain configuration (block definitions, layout types, resolver fallback) stays in `explayouts.ini` of the `explayouts` extension.
+- Almost no configuration of its own - The extension ships no modules or templates and one INI file (`audit.ini.append.php`, which registers the audit events of the layouts transfer); it contains the five service classes, the transfer classes and an `autoloads/explayouts_core_autoload.php` class map. All domain configuration (block definitions, layout types, resolver fallback) stays in `explayouts.ini` of the `explayouts` extension.
 - Proven consumers - The services power `extension/explayouts_ui/modules/explayouts_ui/` (`layout_list.php`, `rule_list.php`, `rule_edit.php`), the `explayouts_ui_api` JSON API dispatcher and module views, and `extension/explayouts/bin/php/layout_info.php`.
 - Subclass-friendly - Services are created with `new` at each call site, so behavior can be changed by subclassing in your own extension without any global replacement mechanism.
 
