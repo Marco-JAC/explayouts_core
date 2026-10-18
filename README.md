@@ -35,7 +35,7 @@ The following features are provided by the Exponential Layouts Core extension:
 Version
 -------
 
-- The current version of Exponential Layouts Core is 1.0.0
+- The current version of Exponential Layouts Core is 1.0.9
 - Last Major update: July 30, 2026
 
 Copyright
