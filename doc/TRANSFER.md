@@ -108,13 +108,15 @@ Import
    linked layout's identifier and checked to reach a zone. Any error rolls everything back and is reported.
 6. **After the commit**: audit events (`data.explayouts_core.import`, one `data.explayouts_core.import.item` per written
    item; exports `data.explayouts_core.export`), and only the resolver cache entries that name an affected layout or
-   rule are removed (plus the "no rule matched" entries when rules were written).
+   rule are removed (plus the "no rule matched" entries when rules were written). When a layout was published or a
+   rule written, every page of the page cache is purged (tag `ez-all`, as a write in the layout editor does; report
+   `page_cache_purged`), on the command line too: the pages showed the old layout until the cache was cleared by hand.
 
 Tests
 -----
 
 - `php vendor/bin/phpunit -c extension/explayouts_core/phpunit.xml.dist`: format, checksums, version, schema, diff,
-  strategies, id mapping and the selective cache clear, without a database.
+  strategies, id mapping, the selective cache clear and the page cache purge, without a database.
 - `php bin/php/ezexec.php extension/explayouts_core/tests/explayoutscoretransferroundtriptest.php`: copies the site's
   layout tables into a throwaway SQLite database, exports everything, imports it into a fresh one with other node and
   object ids, compares both row by row by natural key, then checks a dry run (all identical), a copy, an overwrite, a
