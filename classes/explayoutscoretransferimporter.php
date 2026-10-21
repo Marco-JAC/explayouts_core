@@ -77,7 +77,7 @@ class expLayoutsCoreTransferImporter extends expLayoutsCoreLayoutService
 
     /**
      * Writes the plan. Returns a report: ok, errors, written (list of what was
-     * done), affected_layouts, affected_rules, cache_entries_removed.
+     * done), affected_layouts, affected_rules, cache_entries_removed, page_cache_purged.
      *
      * @param array $options strategy, items (plan key => strategy), publish, unmapped (drop, keep, fail)
      */
@@ -91,7 +91,8 @@ class expLayoutsCoreTransferImporter extends expLayoutsCoreLayoutService
         $this->archive = $archive;
         $this->refs = isset( $archive['references.json'] ) ? $archive['references.json'] : array();
         $this->report = array( 'ok' => false, 'errors' => array(), 'warnings' => array(), 'written' => array(),
-                               'affected_layouts' => array(), 'affected_rules' => array(), 'cache_entries_removed' => 0 );
+                               'affected_layouts' => array(), 'affected_rules' => array(), 'cache_entries_removed' => 0,
+                               'page_cache_purged' => false );
         $this->affectedLayouts = array();
         $this->affectedRules = array();
 
@@ -148,8 +149,50 @@ class expLayoutsCoreTransferImporter extends expLayoutsCoreLayoutService
         $this->report['affected_layouts'] = array_values( array_unique( $this->affectedLayouts ) );
         $this->report['affected_rules'] = array_values( array_unique( $this->affectedRules ) );
         if ( $this->report['ok'] )
+        {
             $this->report['cache_entries_removed'] = self::clearResolverCacheFor( $this->report['affected_layouts'], $this->report['affected_rules'] );
+            $this->report['page_cache_purged'] = self::pagesChanged( $this->report, $publish ) && self::purgePageCaches();
+        }
         return $this->report;
+    }
+
+    /**
+     * Whether what an import wrote can change pages of the site: a published layout or a rule. A layout imported as
+     * a draft changes nothing the site shows.
+     *
+     * @param array $report the report of import()
+     * @param bool $publish whether the layouts were published
+     * @return bool
+     */
+    public static function pagesChanged( array $report, $publish )
+    {
+        if ( empty( $report['ok'] ) || empty( $report['written'] ) )
+            return false;
+        return $publish || !empty( $report['affected_rules'] );
+    }
+
+    /**
+     * Purges every page of the page caches (the HTTP page cache, which Velocity answers from too), as a write in the
+     * layout editor does (ezpHttpCacheListener::requestInput()). An import on the command line made no request to
+     * the editor, so the pages kept the old layout until the cache was cleared by hand.
+     *
+     * @return bool whether a page cache was there to purge
+     */
+    public static function purgePageCaches()
+    {
+        if ( !class_exists( 'ezpHttpCacheListener' ) || !method_exists( 'ezpHttpCacheListener', 'purgeTags' ) )
+            return false;
+        try
+        {
+            ezpHttpCacheListener::purgeTags( array( 'ez-all' ) );
+        }
+        catch ( Exception $e )
+        {
+            if ( class_exists( 'eZDebug' ) )
+                eZDebug::writeWarning( 'The page cache was not purged after the import: ' . $e->getMessage(), __METHOD__ );
+            return false;
+        }
+        return true;
     }
 
     /**
