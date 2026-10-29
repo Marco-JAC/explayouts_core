@@ -7,7 +7,7 @@
  * too (marked "dependency"), followed through link chains, so an archive can
  * be imported without leaving a link pointing nowhere.
  *
- * @copyright Copyright (C) 1998 - 2026 7x. All rights reserved.
+ * @copyright Copyright (C) 1998 - 2026 Exponential Foundation and 7x. All rights reserved.
  * @license GNU General Public License v2.0 (or any later version)
  */
 class expLayoutsCoreTransferExporter

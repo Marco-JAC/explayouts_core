@@ -19,7 +19,7 @@
  * installation after the linked layouts themselves were written, and checked
  * to reach a zone; a link that cannot be made stops the import.
  *
- * @copyright Copyright (C) 1998 - 2026 7x. All rights reserved.
+ * @copyright Copyright (C) 1998 - 2026 Exponential Foundation and 7x. All rights reserved.
  * @license GNU General Public License v2.0 (or any later version)
  */
 class expLayoutsCoreTransferImporter extends expLayoutsCoreLayoutService
