@@ -441,4 +441,5 @@ finally
 
 $failures = $GLOBALS['expLayoutsTransferFailures'];
 echo ( $failures ? 'FAIL' : 'PASS' ) . ': ' . ( $GLOBALS['expLayoutsTransferChecks'] - $failures ) . ' of ' . $GLOBALS['expLayoutsTransferChecks'] . " checks\n";
-return $failures ? 1 : 0;
+// ezexec sets exit code 1 for any return value other than 1.
+return $failures ? 0 : 1;
